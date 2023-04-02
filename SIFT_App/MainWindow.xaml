@@ -1,0 +1,28 @@
+﻿<Window x:Class="LogPolarTransform.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Image Rotation Calculator" Height="800" Width="1000">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="50*"/>
+            <ColumnDefinition Width="50*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <StackPanel Grid.Row="0" Grid.Column="0" Margin="10">
+            <Button x:Name="btnUploadImage1" Content="Upload Image 1" Click="btnUploadImage1_Click"/>
+        </StackPanel>
+        <Image x:Name="imgImage1" Grid.Row="1" Grid.Column="0" Margin="10"/>
+        <StackPanel Grid.Row="0" Grid.Column="1" Margin="10">
+            <Button x:Name="btnUploadImage2" Content="Upload Image 2" Click="btnUploadImage2_Click"/>
+        </StackPanel>
+        <Image x:Name="imgImage2" Grid.Row="1" Grid.Column="1" Margin="10"/>
+        <StackPanel Grid.Row="2" Grid.Column="0" Margin="10">
+            <Button x:Name="btnCalculateAngle" Content="Calculate Angle" Click="btnCalculateAngle_Click"/>
+        </StackPanel>
+        <TextBox x:Name="txtAngle" Grid.Row="2" Grid.Column="1" Margin="10"/>
+    </Grid>
+</Window>

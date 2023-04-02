@@ -9,7 +9,7 @@ using OpenCvSharp.WpfExtensions;
 
 using Window = System.Windows.Window;
 
-namespace LogPolarTransform;
+namespace SIFT_App;
 
 public partial class MainWindow : Window
 {

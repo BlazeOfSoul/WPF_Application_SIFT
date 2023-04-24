@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Windows;
 
@@ -7,8 +8,9 @@ using Microsoft.Win32;
 
 using OpenCvSharp;
 using OpenCvSharp.Features2D;
+using OpenCvSharp.Internal.Vectors;
 using OpenCvSharp.WpfExtensions;
-
+using OpenCvSharp.XFeatures2D;
 using Window = System.Windows.Window;
 
 namespace SIFT_App;
@@ -65,7 +67,7 @@ public partial class MainWindow : Window
             var descriptors2 = new Mat();
 
             // Initialize SIFT detector and matcher
-            var sift = SIFT.Create(nFeatures: 0, nOctaveLayers: 3, contrastThreshold: 0.04, edgeThreshold: 10, sigma: 1.6);
+            var sift = SIFT.Create(nFeatures: 100, nOctaveLayers: 5, contrastThreshold: 0.04, edgeThreshold: 10, sigma: 1.56);
             var matcher = new FlannBasedMatcher();
 
             // Detect keypoints and compute descriptors for both images
@@ -101,12 +103,17 @@ public partial class MainWindow : Window
 
             var angle = Math.Atan2(homography.At<double>(1, 0), homography.At<double>(0, 0)) * 180 / Math.PI;
 
-            // Draw a green rectangle around the object in image2
-            var rect = Cv2.BoundingRect(points2);
-            Cv2.Rectangle(_image2, rect, new Scalar(0, 255, 0), thickness: 2);
+            // Draw a red highlight around the first object in image1
+            var rect1 = Cv2.BoundingRect(points1.Take(4).ToArray());
+            Cv2.Rectangle(_image1, rect1, new Scalar(0, 0, 255), thickness: 2);
 
-            // Display the angle in the text box and the updated image in image2
+            // Draw a green rectangle around the object in image2
+            var rect2 = Cv2.BoundingRect(points2.Take(4).ToArray());
+            Cv2.Rectangle(_image2, rect2, new Scalar(0, 255, 0), thickness: 2);
+
+            // Display the angle in the text box and the updated images in image1 and image2
             txtAngle.Text = angle.ToString();
+            imgImage1.Source = _image1.ToBitmapSource();
             imgImage2.Source = _image2.ToBitmapSource();
         }
     }

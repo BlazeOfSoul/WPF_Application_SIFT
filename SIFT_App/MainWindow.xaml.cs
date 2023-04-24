@@ -1,12 +1,16 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
 using System.Windows;
 
 using Microsoft.Win32;
 
 using OpenCvSharp;
 using OpenCvSharp.Features2D;
+using OpenCvSharp.Internal.Vectors;
 using OpenCvSharp.WpfExtensions;
-
+using OpenCvSharp.XFeatures2D;
 using Window = System.Windows.Window;
 
 namespace SIFT_App;
@@ -63,44 +67,67 @@ public partial class MainWindow : Window
             var descriptors2 = new Mat();
 
             // Initialize SIFT detector and matcher
-            var sift = SIFT.Create();
-            var matcher = new BFMatcher();
+            var sift = SIFT.Create(nFeatures: 100, nOctaveLayers: 5, contrastThreshold: 0.04, edgeThreshold: 10, sigma: 1.56);
+            var matcher = new FlannBasedMatcher();
 
             // Detect keypoints and compute descriptors for both images
             KeyPoint[] keypoints1, keypoints2;
             sift.DetectAndCompute(_image1, null, out keypoints1, descriptors1);
             sift.DetectAndCompute(_image2, null, out keypoints2, descriptors2);
 
-            // Match the descriptors using brute-force matching
-            var matches = matcher.Match(descriptors1, descriptors2);
+            // Match the descriptors using FLANN-based matching
+            var matches = matcher.KnnMatch(descriptors1, descriptors2, k: 2);
+
+            // Filter out matches that are not consistent with a rotation
+            var goodMatches = new List<DMatch>();
+            foreach (var match in matches)
+            {
+                if (match[0].Distance < 0.7 * match[1].Distance)
+                {
+                    var pt1 = keypoints1[match[0].QueryIdx].Pt;
+                    var pt2 = keypoints2[match[0].TrainIdx].Pt;
+
+                    // Check if the points are within the boundaries of the objects
+                    if (IsPointWithinObject(pt1, _image1) && IsPointWithinObject(pt2, _image2))
+                    {
+                        goodMatches.Add(match[0]);
+                    }
+                }
+            }
 
             // Calculate the rotation angle
-            var angle = CalculateRotationAngle(keypoints1, keypoints2, matches);
+            var points1 = goodMatches.Select(match => keypoints1[match.QueryIdx].Pt).ToArray();
+            var points2 = goodMatches.Select(match => keypoints2[match.TrainIdx].Pt).ToArray();
+            var homography = Cv2.FindHomography(InputArray.Create(points1), InputArray.Create(points2),
+                HomographyMethods.Ransac);
 
-            // Display the angle in the text box
+            var angle = Math.Atan2(homography.At<double>(1, 0), homography.At<double>(0, 0)) * 180 / Math.PI;
+
+            // Draw a red highlight around the first object in image1
+            var rect1 = Cv2.BoundingRect(points1.Take(4).ToArray());
+            Cv2.Rectangle(_image1, rect1, new Scalar(0, 0, 255), thickness: 2);
+
+            // Draw a green rectangle around the object in image2
+            var rect2 = Cv2.BoundingRect(points2.Take(4).ToArray());
+            Cv2.Rectangle(_image2, rect2, new Scalar(0, 255, 0), thickness: 2);
+
+            // Display the angle in the text box and the updated images in image1 and image2
             txtAngle.Text = angle.ToString();
+            imgImage1.Source = _image1.ToBitmapSource();
+            imgImage2.Source = _image2.ToBitmapSource();
         }
     }
 
-    private double CalculateRotationAngle(KeyPoint[] keypoints1, KeyPoint[] keypoints2, DMatch[] matches)
+    private bool IsPointWithinObject(Point2f point, Mat image)
     {
-        // Filter out matches that are not consistent with a rotation
-        var numMatches = matches.Length;
-        var points1 = new Point2f[numMatches];
-        var points2 = new Point2f[numMatches];
-        for (var i = 0; i < numMatches; i++)
-        {
-            points1[i] = keypoints1[matches[i].QueryIdx].Pt;
-            points2[i] = keypoints2[matches[i].TrainIdx].Pt;
-        }
+        // Define the boundaries of the object as a percentage of the image size
+        const double boundaryPercentage = 0.1;
 
-        var mask = new Mat();
+        var minX = (int)(image.Width * boundaryPercentage);
+        var maxX = (int)(image.Width * (1 - boundaryPercentage));
+        var minY = (int)(image.Height * boundaryPercentage);
+        var maxY = (int)(image.Height * (1 - boundaryPercentage));
 
-        var homography = Cv2.FindHomography(InputArray.Create(points1), InputArray.Create(points2),
-            HomographyMethods.Ransac, 5, mask);
-
-        // Calculate the rotation angle using the homography matrix
-        var angle = Math.Atan2(homography.At<double>(1, 0), homography.At<double>(0, 0)) * 180 / Math.PI;
-        return angle;
+        return point.X >= minX && point.X <= maxX && point.Y >= minY && point.Y <= maxY;
     }
 }

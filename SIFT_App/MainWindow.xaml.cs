@@ -1,17 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using System.Windows;
-using System.Windows.Controls;
-
 using Microsoft.Win32;
 
 using OpenCvSharp;
 using OpenCvSharp.Features2D;
-using OpenCvSharp.Internal.Vectors;
 using OpenCvSharp.WpfExtensions;
-using OpenCvSharp.XFeatures2D;
+using Image = System.Windows.Controls.Image;
 using Window = System.Windows.Window;
 
 namespace SIFT_App;
@@ -20,6 +16,7 @@ public partial class MainWindow : Window
 {
     private Mat _image1;
     private Mat _image2;
+    private List<Mat> _loadedImages = new();
 
     public MainWindow()
     {
@@ -119,6 +116,60 @@ public partial class MainWindow : Window
         }
     }
 
+    private void BtnLoadImageSeries_Click(object sender, RoutedEventArgs e)
+    {
+        var openFileDialog = new OpenFileDialog
+        {
+            Multiselect = true,
+            Filter = "Image files (*.jpg;*.jpeg;*.png)|*.jpg;*.jpeg;*.png|All files (*.*)|*.*",
+        };
+
+        while (openFileDialog.ShowDialog() == true)
+        {
+            try
+            {
+                foreach (var fileName in openFileDialog.FileNames)
+                {
+                    var image = new Mat(fileName);
+                    _loadedImages.Add(image);
+                }
+
+                DisplayImages();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("An error occurred while uploading the images: " + ex.Message, "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+    }
+
+    private void DisplayImages()
+    {
+        ImageWrapPanel.Children.Clear();
+        foreach (var imageControl in _loadedImages.Select(image => new Image { Source = image.ToBitmapSource(), Width = 250, Height = 500, }))
+        {
+            ImageWrapPanel.Children.Add(imageControl);
+        }
+    }
+
+    private void BtnCalculateAngel_Click(object sender, RoutedEventArgs e)
+    {
+        ImageWrapPanel.Children.Clear();
+        
+        foreach (var image in _loadedImages)
+        {
+            var gray = image.CvtColor(ColorConversionCodes.BGR2GRAY);
+            var edges = gray.Canny(100, 200);
+            var contourImage = image.Clone();
+
+            var contours = Cv2.FindContoursAsArray(edges, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+            Cv2.DrawContours(contourImage, contours, -1, Scalar.Red, 2);
+
+            ImageWrapPanel.Children.Add(new Image { Source = contourImage.ToBitmapSource(), Width = 250, Height = 500, Margin = new Thickness(5) });
+        }
+    }
+
     private bool IsPointWithinObject(Point2f point, Mat image)
     {
         // Define the boundaries of the object as a percentage of the image size
@@ -139,7 +190,7 @@ public partial class MainWindow : Window
 
         // Show SIFT window
         GridSift.Visibility = Visibility.Visible;
-        GridNew.Visibility = Visibility.Collapsed;
+        GridCDE.Visibility = Visibility.Collapsed;
     }
 
     private void MenuItemNew_Click(object sender, RoutedEventArgs e)
@@ -149,7 +200,6 @@ public partial class MainWindow : Window
 
         // Show New window
         GridSift.Visibility = Visibility.Collapsed;
-        GridNew.Visibility = Visibility.Visible;
+        GridCDE.Visibility = Visibility.Visible;
     }
-
 }

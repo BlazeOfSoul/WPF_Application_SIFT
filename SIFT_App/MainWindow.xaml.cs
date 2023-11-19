@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 
 using Microsoft.Win32;
 
@@ -33,7 +34,7 @@ public partial class MainWindow : Window
             try
             {
                 _image1 = new Mat(openFileDialog.FileName);
-                imgImage1.Source = _image1.ToBitmapSource();
+                ImgImage1.Source = _image1.ToBitmapSource();
             }
             catch (Exception ex)
             {
@@ -50,7 +51,7 @@ public partial class MainWindow : Window
             try
             {
                 _image2 = new Mat(openFileDialog.FileName);
-                imgImage2.Source = _image2.ToBitmapSource();
+                ImgImage2.Source = _image2.ToBitmapSource();
             }
             catch (Exception ex)
             {
@@ -112,9 +113,9 @@ public partial class MainWindow : Window
             Cv2.Rectangle(_image2, rect2, new Scalar(0, 255, 0), thickness: 2);
 
             // Display the angle in the text box and the updated images in image1 and image2
-            txtAngle.Text = angle.ToString();
-            imgImage1.Source = _image1.ToBitmapSource();
-            imgImage2.Source = _image2.ToBitmapSource();
+            TxtAngle.Text = angle.ToString();
+            ImgImage1.Source = _image1.ToBitmapSource();
+            ImgImage2.Source = _image2.ToBitmapSource();
         }
     }
 
@@ -130,4 +131,25 @@ public partial class MainWindow : Window
 
         return point.X >= minX && point.X <= maxX && point.Y >= minY && point.Y <= maxY;
     }
+
+    private void MenuItemSift_Click(object sender, RoutedEventArgs e)
+    {
+        MenuItemSift.IsChecked = true;
+        MenuItemNew.IsChecked = false;
+
+        // Show SIFT window
+        GridSift.Visibility = Visibility.Visible;
+        GridNew.Visibility = Visibility.Collapsed;
+    }
+
+    private void MenuItemNew_Click(object sender, RoutedEventArgs e)
+    {
+        MenuItemSift.IsChecked = false;
+        MenuItemNew.IsChecked = true;
+
+        // Show New window
+        GridSift.Visibility = Visibility.Collapsed;
+        GridNew.Visibility = Visibility.Visible;
+    }
+
 }

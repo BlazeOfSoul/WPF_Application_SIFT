@@ -5,7 +5,7 @@
     <Grid>
         <Menu>
             <MenuItem Header="SIFT" Name="MenuItemSift" IsChecked="True" Click="MenuItemSift_Click"/>
-            <MenuItem Header="CDE" Name="MenuItemNew" Click="MenuItemNew_Click"/>
+            <MenuItem Header="CED" Name="MenuItemNew" Click="MenuItemNew_Click"/>
         </Menu>
         
         <Grid x:Name="GridSift" Visibility="Visible">
@@ -50,8 +50,11 @@
                     </WrapPanel>
                 </ScrollViewer>
                 
-                <Button Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="10" 
-                        Content="Calculate Angel" Click="BtnCalculateAngel_Click"/>
+                <StackPanel Grid.Row="2" Margin="10">
+                    <Button Content="Calculate Angel" Click="BtnCalculateAngel_Click"/>
+                    <TextBox x:Name="CdeAngel" Margin="10"/>
+                </StackPanel>
+                
             </Grid>
         </Grid>
     </Grid>

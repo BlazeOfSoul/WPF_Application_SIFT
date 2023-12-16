@@ -1,12 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
+using Accord.Imaging;
 using Microsoft.Win32;
-
 using OpenCvSharp;
 using OpenCvSharp.Features2D;
+using OpenCvSharp.Internal.Vectors;
 using OpenCvSharp.WpfExtensions;
+using OpenCvSharp.XFeatures2D;
 using Image = System.Windows.Controls.Image;
 using Window = System.Windows.Window;
 
@@ -14,9 +18,10 @@ namespace SIFT_App;
 
 public partial class MainWindow : Window
 {
-    private Mat _image1;
-    private Mat _image2;
-    private List<Mat> _loadedImages = new();
+    private Mat _image1 = null!;
+    private Mat _image2 = null!;
+    private readonly List<Mat> _loadedImages = new();
+    private readonly List<ImageRotationData> _imageRotations = new();
 
     public MainWindow()
     {
@@ -25,8 +30,10 @@ public partial class MainWindow : Window
 
     private void btnUploadImage1_Click(object sender, RoutedEventArgs e)
     {
-        var openFileDialog = new OpenFileDialog();
-        openFileDialog.Filter = "Image files (*.jpg;*.jpeg;*.png)|*.jpg;*.jpeg;*.png|All files (*.*)|*.*";
+        var openFileDialog = new OpenFileDialog
+        {
+            Filter = "Image files (*.jpg;*.jpeg;*.png)|*.jpg;*.jpeg;*.png|All files (*.*)|*.*",
+        };
         if (openFileDialog.ShowDialog() == true)
             try
             {
@@ -42,8 +49,10 @@ public partial class MainWindow : Window
 
     private void btnUploadImage2_Click(object sender, RoutedEventArgs e)
     {
-        var openFileDialog = new OpenFileDialog();
-        openFileDialog.Filter = "Image files (*.jpg;*.jpeg;*.png)|*.jpg;*.jpeg;*.png|All files (*.*)|*.*";
+        var openFileDialog = new OpenFileDialog
+        {
+            Filter = "Image files (*.jpg;*.jpeg;*.png)|*.jpg;*.jpeg;*.png|All files (*.*)|*.*",
+        };
         if (openFileDialog.ShowDialog() == true)
             try
             {
@@ -110,7 +119,7 @@ public partial class MainWindow : Window
             Cv2.Rectangle(_image2, rect2, new Scalar(0, 255, 0), thickness: 2);
 
             // Display the angle in the text box and the updated images in image1 and image2
-            TxtAngle.Text = angle.ToString();
+            TxtAngle.Text = angle.ToString(CultureInfo.InvariantCulture);
             ImgImage1.Source = _image1.ToBitmapSource();
             ImgImage2.Source = _image2.ToBitmapSource();
         }
@@ -156,23 +165,95 @@ public partial class MainWindow : Window
     private void BtnCalculateAngel_Click(object sender, RoutedEventArgs e)
     {
         ImageWrapPanel.Children.Clear();
+        _imageRotations.Clear();
+
+        var images = _loadedImages.ToArray();
         
-        foreach (var image in _loadedImages)
+        double anglesSum = 0;
+        var anglesString = "";
+
+        for (var i = 0; i < images.Length - 1; i++)
         {
-            var gray = image.CvtColor(ColorConversionCodes.BGR2GRAY);
-            var edges = gray.Canny(100, 200);
-            var contourImage = image.Clone();
+            var image1 = images[i];
+            var image2 = images[i + 1];
 
-            var contours = Cv2.FindContoursAsArray(edges, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
-            Cv2.DrawContours(contourImage, contours, -1, Scalar.Red, 2);
+            var contourImage1 = DrawContours(image1);
 
-            ImageWrapPanel.Children.Add(new Image { Source = contourImage.ToBitmapSource(), Width = 250, Height = 500, Margin = new Thickness(5) });
+            ImageWrapPanel.Children.Add(new Image { Source = contourImage1.ToBitmapSource(), Width = 250, Height = 500, Margin = new Thickness(5) });
+            
+            var angle = CalculateRotationAngle(image1, image2) / (i + 1);
+            
+            _imageRotations.Add(new ImageRotationData { Angle = angle, });
+            anglesSum += angle;
+
+            anglesString += angle;
+
+            if (i < images.Length - 2)
+            {
+                anglesString += " + ";
+            }
+            else
+            {
+                anglesString += " = ";
+            }
         }
+
+        CdeAngel.Text = anglesString + anglesSum.ToString(CultureInfo.InvariantCulture);
+        var lastImage = DrawContours(images.Last());
+        ImageWrapPanel.Children.Add(new Image { Source = lastImage.ToBitmapSource(), Width = 250, Height = 500, Margin = new Thickness(5) });
+    }
+    
+    private static double CalculateRotationAngle(Mat image1, Mat image2)
+    {
+        var descriptors1 = new Mat();
+        var descriptors2 = new Mat();
+
+        var sift = SIFT.Create(nFeatures: 100, nOctaveLayers: 5, contrastThreshold: 0.04, edgeThreshold: 100, sigma: 1.56);
+        
+        var matcher = new FlannBasedMatcher();
+
+        sift.DetectAndCompute(image1, null, out var keypointsFirst, descriptors1);
+        sift.DetectAndCompute(image2, null, out var keypointsSecond, descriptors2);
+
+        var matches = matcher.KnnMatch(descriptors1, descriptors2, k: 2);
+
+        var goodMatches = new List<DMatch>();
+        foreach (var match in matches)
+        {
+            if (match[0].Distance < 0.7 * match[1].Distance)
+            {
+                var pt1 = keypointsFirst[match[0].QueryIdx].Pt;
+                var pt2 = keypointsSecond[match[0].TrainIdx].Pt;
+
+                if (IsPointWithinObject(pt1, image1) && IsPointWithinObject(pt2, image2))
+                {
+                    goodMatches.Add(match[0]);
+                }
+            }
+        }
+        
+        var points1 = goodMatches.Select(match => keypointsFirst[match.QueryIdx].Pt).ToArray();
+        var points2 = goodMatches.Select(match => keypointsSecond[match.TrainIdx].Pt).ToArray();
+        var homography = Cv2.FindHomography(InputArray.Create(points1), InputArray.Create(points2),
+            HomographyMethods.Ransac);
+
+        return Math.Atan2(homography.At<double>(1, 0), homography.At<double>(0, 0)) * 180 / Math.PI;
+    }
+    
+    private static Mat DrawContours(Mat image)
+    {
+        var gray = image.CvtColor(ColorConversionCodes.BGR2GRAY);
+        var edges = gray.Canny(100, 200);
+        var contourImage = image.Clone();
+
+        var contours = Cv2.FindContoursAsArray(edges, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+        Cv2.DrawContours(contourImage, contours, -1, Scalar.Red, 2);
+
+        return contourImage;
     }
 
-    private bool IsPointWithinObject(Point2f point, Mat image)
+    private static bool IsPointWithinObject(Point2f point, Mat image)
     {
-        // Define the boundaries of the object as a percentage of the image size
         const double boundaryPercentage = 0.1;
 
         var minX = (int)(image.Width * boundaryPercentage);
@@ -198,7 +279,6 @@ public partial class MainWindow : Window
         MenuItemSift.IsChecked = false;
         MenuItemNew.IsChecked = true;
 
-        // Show New window
         GridSift.Visibility = Visibility.Collapsed;
         GridCDE.Visibility = Visibility.Visible;
     }
